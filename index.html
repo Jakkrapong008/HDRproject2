@@ -1,10 +1,9 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react'; // Added useCallback
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 
 // Firebase configuration and imports
-// Make sure to install Firebase: npm install firebase
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, getDocs, Timestamp } from 'firebase/firestore'; // Corrected Firebase import
+import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth'; // Removed signInWithCustomToken
+import { getFirestore, doc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
 
 // Mock data for initial setup (These can be removed once real data is in Firebase)
 const mockFestivals = [
@@ -103,7 +102,7 @@ const mockAttractions = [
         reviews: { avg: 4.8, count: 12500 },
         images: ['https://thesunsight.com/wp-content/uploads/2020/01/SU01-copy.jpg', 'https://www.tongnacottage.com/wp-content/uploads/2023/07/741af8955f1c4ea0956227a7ee1cec16.jpg'],
         type: 'วัฒนธรรม',
-        history: 'วัดพระธาตุดอยสุเทพราชวรวิหารเป็นวัดสำคัญคู่บ้านคู่เมืองเชียงใหม่ สร้างขึ้นเมื่อปี พ.ศ. 1929 ในสมัยพญากือนาธรรมิกราช.',
+        history: 'วัดพระธาตุดอยสุเทพราชวรมหาวิหารเป็นวัดสำคัญคู่บ้านคู่เมืองเชียงใหม่ สร้างขึ้นเมื่อปี พ.ศ. 1929 ในสมัยพญากือนาธรรมิกราช.',
         significance: 'เป็นที่ประดิษฐานพระบรมสารีริกธาตุของพระพุทธเจ้า ซึ่งเป็นที่เคารพสักการะของพุทธศาสนิกชนทั่วโลก และเป็นจุดชมวิวเมืองเชียงใหม่ที่สวยงาม.'
     },
     {
@@ -216,46 +215,25 @@ const mockOtopProducts = [
 
 // Main App Component
 const App = () => {
-    // Retrieve __app_id from the global scope. If not defined, use a default ID.
-    // This allows the app to run outside of the Canvas environment, but Firebase functionality
-    // will require proper configuration via environment variables or a .env file.
     const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-travel-app';
 
-    // State to manage current page view
-    const [currentPage, setCurrentPage] = useState('home');
-    // Firebase state variables
+    const [currentPage, setCurrentPage] = useState('dashboard'); // Default to dashboard
     const [db, setDb] = useState(null);
     const [auth, setAuth] = useState(null);
-    const [user, setUser] = useState(null);
+    const [user, setUser] = useState(null); // User will be anonymous if no custom token
     const [isAuthReady, setIsAuthReady] = useState(false);
-    const [userId, setUserId] = useState('anonymous'); // Default to anonymous
-
-    // Set currentPage to 'home' explicitly when the component is rendered, regardless of login state
-    useEffect(() => {
-        setCurrentPage('home');
-    }, []);
+    const [userId, setUserId] = useState('anonymous');
 
     // Initialize Firebase
     useEffect(() => {
         try {
-            // Retrieve __firebase_config from the global scope.
-            // In a real deployed app, you would use environment variables like:
-            // const firebaseConfig = {
-            //   apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
-            //   authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
-            //   projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
-            //   storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
-            //   messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
-            //   appId: process.env.REACT_APP_FIREBASE_APP_ID
-            // };
             const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
 
             if (!firebaseConfig || !firebaseConfig.apiKey) {
                 console.warn("Firebase config is not fully available. Firebase features may not work. Ensure __firebase_config is set or use environment variables.");
-                // We will still initialize app but expect errors if functions are called without proper config
             }
 
-            const app = initializeApp(firebaseConfig || {}); // Initialize with empty object if config is null
+            const app = initializeApp(firebaseConfig || {});
             const firestore = getFirestore(app);
             const authentication = getAuth(app);
 
@@ -268,64 +246,36 @@ const App = () => {
                     setUser(currentUser);
                     setUserId(currentUser.uid);
                     console.log("Firebase Auth: Authenticated with UID:", currentUser.uid);
-                    setIsAuthReady(true);
                 } else {
-                    let signedIn = false;
-                    const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-
-                    if (initialAuthToken) {
-                        try {
-                            // Log only a portion of the token for security/readability, if it's long.
-                            console.log("Firebase Auth: Attempting to sign in with custom token. Token prefix:", initialAuthToken.substring(0, 15), "...");
-                            await signInWithCustomToken(authentication, initialAuthToken);
-                            console.log("Firebase Auth: Signed in with custom token successfully.");
-                            signedIn = true;
-                        } catch (tokenError) {
-                            console.error("Firebase Auth Error: Failed to sign in with custom token (auth/invalid-claims likely).", tokenError);
-                            // Fallback to anonymous sign-in will happen below if not signedIn
-                        }
-                    } else {
-                        console.log("Firebase Auth: __initial_auth_token is not defined. Attempting anonymous sign-in.");
+                    // Always attempt anonymous sign-in if no user is found.
+                    // The custom token error implies it's not always valid in this environment.
+                    try {
+                        console.log("Firebase Auth: Attempting to sign in anonymously (no custom token or custom token failed).");
+                        const anonUserCredential = await signInAnonymously(authentication);
+                        setUser(anonUserCredential.user);
+                        setUserId(anonUserCredential.user.uid);
+                        console.log("Firebase Auth: Signed in anonymously successfully with UID:", anonUserCredential.user.uid);
+                    } catch (anonError) {
+                        console.error("Firebase Auth Error: Failed to sign in anonymously.", anonError);
+                        setUser(null); // Ensure user is null if anonymous sign-in also fails
+                        setUserId('anonymous'); // Ensure userId is 'anonymous'
                     }
-
-                    if (!signedIn) {
-                        try {
-                            console.log("Firebase Auth: Attempting to sign in anonymously...");
-                            await signInAnonymously(authentication);
-                            console.log("Firebase Auth: Signed in anonymously successfully.");
-                        } catch (anonError) {
-                            console.error("Firebase Auth Error: Failed to sign in anonymously.", anonError);
-                            setUser(null); // Ensure user is null if anonymous sign-in also fails
-                            setUserId('anonymous'); // Ensure userId is 'anonymous'
-                        }
-                    }
-                    setIsAuthReady(true); // Always set auth ready, even if login fails
                 }
+                setIsAuthReady(true); // Always set auth ready, even if login fails
             });
 
-            // Clean up subscription on unmount
             return () => unsubscribe();
         } catch (error) {
             console.error("Failed to initialize Firebase:", error);
         }
-    }, []); // Empty dependency array ensures this runs only once on mount.
+    }, []);
 
-    // Function to handle mock login (for demo purposes)
-    const handleLoginSuccess = (mockUser) => {
-        setUser(mockUser);
-        setUserId(mockUser.uid || crypto.randomUUID()); // Use Firebase UID if available, else a random UUID for mock
-        setCurrentPage('dashboard'); // Navigate to dashboard after successful login
-    };
-
-    // Global UI for Navigation (once logged in)
+    // Global UI for Navigation (always shown as user is always 'logged in' anonymously)
     const Navbar = () => {
-        if (!user) return null; // Only show navbar if user is logged in
-        // NOTE: Changed to fixed bottom navigation
         return (
             <nav className="bg-gradient-to-r from-blue-600 to-blue-800 p-2 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] fixed bottom-0 w-full z-50">
                 <div className="container mx-auto flex justify-around items-center">
-                    {/* Simplified for bottom nav */}
-                     <button
+                    <button
                         className="flex flex-col items-center text-white hover:text-blue-200 px-2 py-1 rounded-lg transition duration-300 font-['Prompt']"
                         onClick={() => setCurrentPage('dashboard')}
                     >
@@ -367,7 +317,7 @@ const App = () => {
 
     // --- Components for each page ---
 
-    // Home Page (Pre-Login)
+    // Home Page (Now the entry point before dashboard)
     const HomePage = () => {
         const [festivalIndex, setFestivalIndex] = useState(0);
         const [featureIndex, setFeatureIndex] = useState(0);
@@ -393,7 +343,7 @@ const App = () => {
             <div className="min-h-screen bg-gray-100 flex flex-col items-center py-10 font-['Prompt']">
                 {/* Header */}
                 <header className="w-full bg-blue-700 text-white p-6 text-center shadow-lg">
-                    <h1 className="text-4xl font-bold mb-2">Travel Thailand</h1>
+                    <h1 className="text-4xl font-bold mb-2">ไปไหนดี (Pai Nai Dee)</h1>
                     <p className="text-xl">ค้นพบประสบการณ์ท่องเที่ยวที่ไม่เหมือนใคร</p>
                 </header>
 
@@ -466,226 +416,19 @@ const App = () => {
                         ))}
                     </div>
                 </section>
-
-                {/* Login Button */}
-                <div className="mt-10">
-                    <button
-                        onClick={() => setCurrentPage('login')}
-                        className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-full shadow-lg transform transition duration-300 hover:scale-105 text-xl font-['Prompt']"
-                    >
-                        เข้าสู่ระบบ
-                    </button>
-                </div>
-            </div>
-        );
-    };
-
-    // Login Page
-    const LoginPage = () => {
-        const [username, setUsername] = useState('');
-        const [password, setPassword] = useState('');
-        const [showPassword, setShowPassword] = useState(false);
-        const [loading, setLoading] = useState(false);
-        const [error, setError] = useState('');
-
-        const handleLogin = async (e) => {
-            e.preventDefault();
-            setError('');
-            setLoading(true);
-
-            if (!username || !password) {
-                setError('กรุณากรอกชื่อผู้ใช้/อีเมลและรหัสผ่าน');
-                setLoading(false);
-                return;
-            }
-
-            // Simulate API call for login
-            try {
-                // In a real app, you would use Firebase Auth's signInWithEmailAndPassword here
-                // For demonstration, we'll simulate success after a delay
-                await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate network delay
-
-                if (username === 'test@example.com' && password === 'password123') {
-                    handleLoginSuccess({ uid: 'mock_user_123', email: username, displayName: 'ผู้ใช้ทดสอบ' });
-                } else {
-                    setError('รหัสผ่านหรือชื่อบัญชีของคุณไม่ถูกต้อง');
-                }
-            } catch (err) {
-                setError('เกิดข้อผิดพลาดในการเข้าสู่ระบบ');
-                console.error("Login error:", err);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        const SocialLoginButton = ({ icon, text, bgColor, hoverBgColor }) => (
-            <button
-                className={`flex items-center justify-center w-full py-3 px-4 rounded-xl shadow-md transition duration-300 hover:scale-[1.02] ${bgColor} ${hoverBgColor} text-white font-bold mb-3 font-['Prompt']`}
-                onClick={() => {
-                    setError('');
-                    // Replaced alert with console.log as alerts are not good for UI/UX
-                    console.log(`เข้าสู่ระบบด้วย ${text} (ฟังก์ชันนี้จำลองขึ้น)`);
-                    // In a real app, trigger Firebase Social Auth (e.g., signInWithPopup for Google/Facebook)
-                    // For mock, just navigate to dashboard
-                    handleLoginSuccess({ uid: `mock_${text.toLowerCase()}_user`, displayName: `${text} User` });
-                }}
-            >
-                <span className="text-2xl mr-3">{icon}</span> {text}
-            </button>
-        );
-
-        return (
-            <div className="min-h-screen bg-gradient-to-br from-blue-100 to-indigo-200 flex items-center justify-center p-4 font-['Prompt']">
-                <div className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md transform transition-all duration-300 hover:scale-[1.01] border border-gray-200">
-                    <h2 className="text-4xl font-bold text-center text-gray-800 mb-8">เข้าสู่ระบบ</h2>
-
-                    {/* Username/Email & Password Form */}
-                    <form onSubmit={handleLogin} className="space-y-6">
-                        {/* Username/Email Input */}
-                        <div>
-                            <label htmlFor="username" className="block text-gray-700 text-lg font-medium mb-2">
-                                ชื่อผู้ใช้ หรืออีเมล
-                            </label>
-                            <div className="relative">
-                                <span className="absolute inset-y-0 left-0 flex items-center pl-3">
-                                    {/* User icon */}
-                                    <svg className="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                                    </svg>
-                                </span>
-                                <input
-                                    type="text"
-                                    id="username"
-                                    className="pl-12 pr-4 py-3 w-full border border-gray-300 rounded-xl focus:ring-blue-500 focus:border-blue-500 text-lg placeholder-gray-400 focus:outline-none"
-                                    placeholder="ชื่อผู้ใช้ หรืออีเมล"
-                                    value={username}
-                                    onChange={(e) => { setUsername(e.target.value); setError(''); }}
-                                    required
-                                />
-                            </div>
-                        </div>
-
-                        {/* Password Input */}
-                        <div>
-                            <label htmlFor="password" className="block text-gray-700 text-lg font-medium mb-2">
-                                รหัสผ่าน
-                            </label>
-                            <div className="relative">
-                                <input
-                                    type={showPassword ? 'text' : 'password'}
-                                    id="password"
-                                    className="pr-12 pl-4 py-3 w-full border border-gray-300 rounded-xl focus:ring-blue-500 focus:border-blue-500 text-lg placeholder-gray-400 focus:outline-none"
-                                    placeholder="รหัสผ่าน"
-                                    value={password}
-                                    onChange={(e) => { setPassword(e.target.value); setError(''); }}
-                                    required
-                                />
-                                <button
-                                    type="button"
-                                    className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-500 hover:text-gray-700 focus:outline-none"
-                                    onClick={() => setShowPassword(!showPassword)}
-                                    aria-label={showPassword ? 'ซ่อนรหัสผ่าน' : 'แสดงรหัสผ่าน'}
-                                >
-                                    {showPassword ? (
-                                        // Eye slash icon
-                                        <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.25L10.125 10.125M6.25 6.25L18.25 18.25" />
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M1.25 12s2.75 7 10.75 7 10.75-7 10.75-7-2.75-7-10.75-7-10.75 7-10.75 7z" />
-                                        </svg>
-                                    ) : (
-                                        // Eye icon
-                                        <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                        </svg>
-                                    )}
-                                </button>
-                            </div>
-                            <p className="text-sm text-gray-500 mt-2">* กรุณาอย่าใช้รหัสผ่านซ้ำกับบัญชีอื่น</p>
-                        </div>
-
-                        {/* Error Message */}
-                        {error && <p className="text-red-500 text-center text-sm">{error}</p>}
-
-                        {/* Login Button */}
-                        <button
-                            type="submit"
-                            className={`w-full py-3 rounded-xl shadow-lg transition duration-300 text-white font-bold text-xl ${
-                                !username || !password || loading
-                                    ? 'bg-blue-400 cursor-not-allowed'
-                                    : 'bg-blue-600 hover:bg-blue-700'
-                            }`}
-                            disabled={!username || !password || loading}
-                        >
-                            {loading ? (
-                                <span className="flex items-center justify-center">
-                                    <svg className="animate-spin h-5 w-5 mr-3 text-white" viewBox="0 0 24 24">
-                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                    </svg>
-                                    กำลังเข้าสู่ระบบ...
-                                </span>
-                            ) : (
-                                'เข้าสู่ระบบ'
-                            )}
-                        </button>
-                    </form>
-
-                    {/* Divider */}
-                    <div className="flex items-center my-6">
-                        <hr className="flex-grow border-t border-gray-300" />
-                        <span className="px-4 text-gray-500 text-lg">หรือเข้าสู่ระบบด้วย</span>
-                        <hr className="flex-grow border-t border-gray-300" />
-                    </div>
-
-                    {/* Social Media Login Buttons */}
-                    <div className="space-y-3">
-                        <SocialLoginButton
-                            icon={<svg className="h-6 w-6" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path fillRule="evenodd" d="M22 12c0-5.523-4.477-10-10-10S2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.877v-7.52h-2.54V12h2.54V9.797c0-2.505 1.492-3.89 3.776-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33V22H12c5.523 0 10-4.477 10-10z" clipRule="evenodd" /></svg>}
-                            text="Facebook"
-                            bgColor="bg-blue-800"
-                            hoverBgColor="hover:bg-blue-900"
-                        />
-                        <SocialLoginButton
-                            icon={<svg className="h-6 w-6" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm-2.03 17.502h-3.411v-10.005h3.411v10.005zm-1.706-11.458c-.94 0-1.706-.764-1.706-1.706s.764-1.706 1.706-1.706 1.706.764 1.706 1.706-.764 1.706-1.706 1.706zm3.649 11.458h3.411v-5.596c0-1.336.711-1.895 1.748-1.895 1.037 0 1.503.791 1.503 1.895v5.596h3.411v-6.09c0-3.328-1.776-4.954-4.14-4.954-1.98 0-2.883 1.157-3.364 1.905h-.028v-1.657h-3.411s.046.216.046 10.005z"/></svg>}
-                            text="Gmail (Google)"
-                            bgColor="bg-red-600"
-                            hoverBgColor="hover:bg-red-700"
-                        />
-                        <SocialLoginButton
-                            icon={<svg className="h-6 w-6" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path fillRule="evenodd" d="M12 0c-3.376 0-3.797.016-5.137.076-1.34.06-2.203.27-2.98.585-.748.308-1.456.723-2.112 1.379-.656.656-1.071 1.364-1.379 2.112-.315.777-.525 1.64-.585 2.98-.06 1.34-.076 1.761-.076 5.137s.016 3.797.076 5.137c.06 1.34.27 2.203.585 2.98.308.748.723 1.456 1.379 2.112.656.656 1.364 1.071 1.379 2.112-.777.315-1.64.525-2.98.585-1.34.06-1.761.076-5.137.076s3.797-.016 5.137-.076c1.34-.06 2.203-.27 2.98-.585.748-.308 1.456-.723 2.112-1.379.656-.656 1.071-1.364 1.379-2.112.315-.777-.525 1.64-.585 2.98.06-1.34.076-1.761.076-5.137s-.013-3.659-.071-4.949c-.057-1.29-.254-1.954-.441-2.428-.17-.442-.384-.8-.741-1.157-.357-.357-.715-.571-.741-1.157-.187-.474-.384-1.138-.441-2.428-.058-1.29-.071-1.682-.071-4.949z"/></svg>}
-                            text="Instagram"
-                            bgColor="bg-gradient-to-tr from-yellow-400 via-red-500 to-pink-600"
-                            hoverBgColor="hover:from-yellow-500 hover:via-red-600 hover:to-pink-700"
-                        />
-                    </div>
-
-                    <p className="text-center text-gray-600 mt-6 text-lg">
-                        ยังไม่มีบัญชี?{' '}
-                        <button
-                            onClick={() => console.log('นำไปยังหน้าสมัครใช้งาน (ยังไม่สร้าง)')} // Mock navigation
-                            className="text-blue-600 hover:underline font-bold focus:outline-none"
-                        >
-                            สมัครใช้งาน
-                        </button>
-                    </p>
-                    <p className="text-center text-gray-500 mt-2 text-sm">
-                        User ID: {userId}
-                    </p>
-                </div>
+                {/* No login button anymore */}
             </div>
         );
     };
 
     // Dashboard Page (After Login) - MODIFIED with new AI options
     const DashboardPage = () => {
-        const [origin, setOrigin] = useState(''); // Changed initial state
+        const [origin, setOrigin] = useState('');
         const [destination, setDestination] = useState('');
         const [aiSuggestion, setAiSuggestion] = useState(null);
         const [aiLoading, setAiLoading] = useState(false);
         const [aiError, setAiError] = useState('');
 
-        // NEW: State for multiple trip styles
         const [tripStyles, setTripStyles] = useState({
             fastest: false,
             economical: false,
@@ -698,7 +441,6 @@ const App = () => {
             shopping: false,
         });
 
-        // Trip style options for UI
         const tripStyleOptions = [
             { id: 'fastest', label: 'เร็วที่สุด', icon: '🚀' },
             { id: 'economical', label: 'ประหยัดที่สุด', icon: '💰' },
@@ -711,12 +453,10 @@ const App = () => {
             { id: 'shopping', label: 'เน้นช้อปปิ้ง', icon: '🛍️' },
         ];
 
-        // New states for interactive trip builder
         const [suggestedPlaces, setSuggestedPlaces] = useState([]);
         const [selectedPlaces, setSelectedPlaces] = useState([]);
         const [showTripBuilder, setShowTripBuilder] = useState(false);
 
-        // Handler for checkbox changes
         const handleStyleChange = (styleId) => {
             setTripStyles(prevStyles => ({
                 ...prevStyles,
@@ -786,9 +526,7 @@ const App = () => {
                     }
                 }
             };
-            // API key for Gemini 2.0 Flash - this will be automatically provided by the Canvas environment.
-            // DO NOT replace with your actual API key here for GitHub. It should be handled securely as environment variable.
-            const apiKey = "";
+            const apiKey = "AIzaSyCRJeE997JfqEIzct8Qet9Fk9gYoZ1OOIs"; // Gemini API Key
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
             try {
@@ -819,7 +557,6 @@ const App = () => {
             }
         };
 
-        // --- Handlers for Interactive Trip Builder ---
         const handleSelectPlace = (place) => {
             setSelectedPlaces(prev => [...prev, place]);
         };
@@ -840,7 +577,6 @@ const App = () => {
         };
 
         const handleLoadMore = async () => {
-            // Replaced alert with console.log for better UX
             console.log('กำลังค้นหาสถานที่เพิ่มเติมด้วย AI...');
             const morePlacesPrompt = `จากแผนการเดินทางไป ${destination}, ช่วยแนะนำสถานที่ท่องเที่ยว, ร้านอาหาร, หรือคาเฟ่เพิ่มเติมที่น่าสนใจและอยู่นอกเหนือจากแผนเดิมอีก 3 แห่ง`;
             const morePlaces = [
@@ -848,20 +584,17 @@ const App = () => {
                 { id: `extra-rest-${Math.random()}`, name: 'ร้านก๋วยเตี๋ยวแนะนำ (จำลอง)', description: 'ก๋วยเตี๋ยวเรือรสเด็ด', type: 'restaurant' },
             ];
             setSuggestedPlaces(prev => [...prev, ...morePlaces]);
-            // Replaced alert with console.log for better UX
             console.log('โหลดรายการเพิ่มเติมแล้ว');
         };
 
         const handleSummarizeRoute = () => {
             if (selectedPlaces.length < 1) {
-                // Replaced alert with console.log for better UX
                 console.log('กรุณาเลือกอย่างน้อย 1 สถานที่เพื่อสร้างเส้นทาง');
                 return;
             }
             const waypoints = selectedPlaces.map(p => encodeURIComponent(p.name)).join('/');
             const googleMapsUrl = `https://www.google.com/maps/dir/${encodeURIComponent(origin)}/${waypoints}/${encodeURIComponent(destination)}`;
 
-            // Replaced alert with console.log for better UX, and directly open link
             console.log(`เส้นทางของคุณพร้อมแล้ว! กำลังเปิด Google Maps...`);
             window.open(googleMapsUrl, '_blank');
             console.log("Generated Route URL:", googleMapsUrl);
@@ -870,7 +603,7 @@ const App = () => {
         const PlaceIcon = ({ type }) => {
             const icons = {
                 attraction: '🏞️',
-                restaurant: '�',
+                restaurant: '🍜',
                 cafe: '☕'
             };
             return <span className="text-2xl mr-3">{icons[type] || '📍'}</span>;
@@ -1004,7 +737,6 @@ const App = () => {
                     {/* Travel Calculation / Comparison Section */}
                     <section className="bg-white p-8 rounded-2xl shadow-xl border border-green-200 mt-10">
                         <h3 className="text-3xl font-semibold text-green-700 mb-6 border-b pb-3">ระบบคำนวณการเดินทาง (เปรียบเทียบ)</h3>
-                        {/* Content from original component... */}
                         <p className="text-gray-600">ส่วนนี้เป็นส่วนจำลองการคำนวณเส้นทางและค่าใช้จ่าย ซึ่งสามารถพัฒนาเพิ่มเติมในอนาคต</p>
                     </section>
                 </div>
@@ -1012,8 +744,8 @@ const App = () => {
         );
     };
 
-    // Tourist Attractions Page (MODIFIED)
-    const AttractionsPage = ({ db, auth, user, userId, isAuthReady, appId }) => { // Receive Firebase props
+    // Tourist Attractions Page
+    const AttractionsPage = ({ db, auth, user, userId, isAuthReady, appId }) => {
         const [searchTerm, setSearchTerm] = useState('');
         const [selectedProvince, setSelectedProvince] = useState('');
         const [selectedType, setSelectedType] = useState('');
@@ -1021,19 +753,18 @@ const App = () => {
         const [loading, setLoading] = useState(true);
         const [error, setError] = useState('');
         const [currentFestivalSlide, setCurrentFestivalSlide] = useState(0);
-        const [selectedAttraction, setSelectedAttraction] = useState(null); // New state for selected attraction detail
+        const [selectedAttraction, setSelectedAttraction] = useState(null);
 
-        // Festival slideshow timer
         useEffect(() => {
             const timer = setInterval(() => {
                 setCurrentFestivalSlide(prev => (prev + 1) % mockFestivals.length);
-            }, 5000); // Change slide every 5 seconds
+            }, 5000);
             return () => clearInterval(timer);
         }, []);
 
 
         useEffect(() => {
-            if (!db || !isAuthReady) return; // Wait for Firebase to be ready
+            if (!db || !isAuthReady) return;
 
             const publicAttractionsRef = collection(db, `artifacts/${appId}/public/data/attractions`);
 
@@ -1048,12 +779,10 @@ const App = () => {
 
             // Initial population if no data exists
             if (mockAttractions.length > 0) {
-                // Check if collection is empty, then add mock data
                 getDocs(publicAttractionsRef).then(snapshot => {
                     if (snapshot.empty) {
                         mockAttractions.forEach(async (attr) => {
                             try {
-                                // Ensure document ID is set to attr.id for consistent data
                                 await setDoc(doc(publicAttractionsRef, attr.id), attr);
                                 console.log(`Added mock attraction: ${attr.name}`);
                             } catch (e) {
@@ -1065,7 +794,7 @@ const App = () => {
             }
 
             return () => unsubscribe();
-        }, [db, isAuthReady, userId, appId]); // Added appId to dependency array
+        }, [db, isAuthReady, userId, appId]);
 
         const filteredAttractions = attractions.filter(attraction => {
             const matchesSearch = attraction.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -1076,14 +805,12 @@ const App = () => {
             return matchesSearch && matchesProvince && matchesType;
         });
 
-        // For now, we will display all mock festivals as "current and future"
         const upcomingFestivals = mockFestivals;
 
 
         if (loading) return <div className="text-center p-8 font-['Prompt'] text-xl">กำลังโหลดข้อมูล...</div>;
         if (error) return <div className="text-center p-8 font-['Prompt'] text-xl text-red-600">{error}</div>;
 
-        // Render AttractionDetailView if an attraction is selected
         if (selectedAttraction) {
             return (
                 <AttractionDetailView
@@ -1104,11 +831,10 @@ const App = () => {
                 <div className="container mx-auto">
                     <h2 className="text-3xl md:text-4xl font-bold text-gray-800 mb-6 text-center">เที่ยวทั่วไทย</h2>
 
-                    {/* NEW: Festivals Section */}
+                    {/* Festivals Section */}
                     <section className="mb-12">
                         <h3 className="text-2xl md:text-3xl font-bold text-blue-700 mb-6 text-center">🎉 งานเทศกาลที่น่าสนใจทั่วประเทศ</h3>
 
-                        {/* Animated Slideshow */}
                         <div className="relative w-full max-w-4xl mx-auto h-64 md:h-96 rounded-2xl shadow-2xl overflow-hidden mb-8">
                             <div
                                 className="flex transition-transform duration-700 ease-in-out h-full"
@@ -1130,7 +856,6 @@ const App = () => {
                                     </div>
                                 ))}
                             </div>
-                            {/* Dots for navigation */}
                             <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex space-x-2">
                                 {mockFestivals.map((_, idx) => (
                                     <button
@@ -1142,7 +867,6 @@ const App = () => {
                             </div>
                         </div>
 
-                        {/* Upcoming Festivals List */}
                         <div className="space-y-6">
                             {upcomingFestivals.map(festival => (
                                 <div key={festival.id} className="bg-white rounded-2xl shadow-lg overflow-hidden flex flex-col md:flex-row items-center transform transition-all duration-300 hover:scale-[1.02] hover:shadow-xl">
@@ -1161,7 +885,7 @@ const App = () => {
                                             <a href={festival.googleMapsLink} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline ml-2 font-semibold">(แผนที่)</a>
                                         </p>
                                         <button
-                                            onClick={() => console.log(`ดูรายละเอียดเพิ่มเติมของงาน ${festival.name}`)} // Replaced alert
+                                            onClick={() => console.log(`ดูรายละเอียดเพิ่มเติมของงาน ${festival.name}`)}
                                             className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-full transition duration-300 shadow-md hover:shadow-lg"
                                         >
                                             ดูเพิ่มเติม
@@ -1212,7 +936,7 @@ const App = () => {
                             <div
                                 key={attraction.id}
                                 className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-200 transform transition duration-300 hover:scale-[1.02] hover:shadow-xl cursor-pointer"
-                                onClick={() => setSelectedAttraction(attraction)} // Set selected attraction on click
+                                onClick={() => setSelectedAttraction(attraction)}
                             >
                                 <img
                                     src={attraction.images[0]}
@@ -1244,7 +968,7 @@ const App = () => {
         );
     };
 
-    // NEW: Attraction Detail View Component
+    // Attraction Detail View Component
     const AttractionDetailView = ({ attraction, onBack, db, auth, user, userId, isAuthReady, appId }) => {
         const [currentImageIndex, setCurrentImageIndex] = useState(0);
         const [reviewText, setReviewText] = useState('');
@@ -1254,10 +978,9 @@ const App = () => {
         const [attractionReviews, setAttractionReviews] = useState([]);
         const [reviewsLoading, setReviewsLoading] = useState(true);
         const [reviewsError, setReviewsError] = useState('');
-        const [summaries, setSummaries] = useState({}); // To store AI summaries for each review
-        const [summaryLoading, setSummaryLoading] = useState({}); // Loading state for summaries
+        const [summaries, setSummaries] = useState({});
+        const [summaryLoading, setSummaryLoading] = useState({});
 
-        // Function for AI content moderation (copied from ReviewsPage for local use)
         const checkReviewSafety = useCallback(async (text) => {
             if (!text.trim()) return { is_safe: true, reason: 'No text to check.' };
 
@@ -1279,7 +1002,7 @@ const App = () => {
                     }
                 }
             };
-            const apiKey = ""; // Canvas will provide this. Do not set your actual key here.
+            const apiKey = "AIzaSyCRJeE997JfqEIzct8Qet9Fk9gYoZ1OOIs"; // Gemini API Key
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
             try {
@@ -1302,11 +1025,10 @@ const App = () => {
                 console.error("Error calling Gemini API for moderation:", error);
                 return { is_safe: true, reason: 'AI moderation failed, proceeding without check.' };
             }
-        }, []); // Empty dependency array means this function is memoized and won't re-create unless deps change
+        }, []);
 
-        // Function for AI review summarization (copied from ReviewsPage for local use)
         const getReviewSummary = useCallback(async (reviewId, text) => {
-            if (summaries[reviewId]) return; // Already summarized
+            if (summaries[reviewId]) return;
             setSummaryLoading(prev => ({ ...prev, [reviewId]: true }));
 
             const prompt = `สรุปเนื้อหารีวิวต่อไปนี้ให้กระชับและได้ใจความสำคัญในภาษาไทย:\n\n"${text}"`;
@@ -1326,7 +1048,7 @@ const App = () => {
                     }
                 }
             };
-            const apiKey = ""; // Canvas will provide this. Do not set your actual key here.
+            const apiKey = "AIzaSyCRJeE997JfqEIzct8Qet9Fk9gYoZ1OOIs"; // Gemini API Key
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
             try {
@@ -1352,20 +1074,18 @@ const App = () => {
             } finally {
                 setSummaryLoading(prev => ({ ...prev, [reviewId]: false }));
             }
-        }, [summaries]); // summaries as dependency to prevent infinite loop
+        }, [summaries]);
 
-        // Fetch reviews for this specific attraction
         useEffect(() => {
             if (!db || !isAuthReady || !attraction?.id) return;
 
             setReviewsLoading(true);
             const reviewsCollectionRef = collection(db, `artifacts/${appId}/public/data/reviews`);
-            // Query reviews where attractionId matches the current attraction's ID
             const q = query(reviewsCollectionRef, where("attractionId", "==", attraction.id));
 
             const unsubscribe = onSnapshot(q, (snapshot) => {
                 const fetchedReviews = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                setAttractionReviews(fetchedReviews.sort((a, b) => b.timestamp?.toDate() - a.timestamp?.toDate())); // Sort by latest
+                setAttractionReviews(fetchedReviews.sort((a, b) => b.timestamp?.toDate() - a.timestamp?.toDate()));
                 setReviewsLoading(false);
             }, (err) => {
                 setReviewsError('Failed to fetch reviews: ' + err.message);
@@ -1374,7 +1094,7 @@ const App = () => {
             });
 
             return () => unsubscribe();
-        }, [db, isAuthReady, attraction, appId]); // Re-fetch when attraction or firebase state changes
+        }, [db, isAuthReady, attraction, appId]);
 
         const handleNextImage = () => {
             setCurrentImageIndex((prevIndex) => (prevIndex + 1) % attraction.images.length);
@@ -1411,22 +1131,21 @@ const App = () => {
             try {
                 const reviewsCollectionRef = collection(db, `artifacts/${appId}/public/data/reviews`);
                 const newReview = {
-                    attractionId: attraction.id, // Link review to this attraction
+                    attractionId: attraction.id,
                     reviewerId: userId,
                     reviewerName: user.displayName || user.email || `ผู้ใช้ ${userId.substring(0, 8)}...`,
-                    reviewerProfilePic: 'https://placehold.co/50x50/B0B0B0/000?text=👤', // Placeholder
+                    reviewerProfilePic: 'https://placehold.co/50x50/B0B0B0/000?text=👤',
                     text: reviewText,
-                    images: [], // No image/video upload for simplicity in this specific section
+                    images: [],
                     videos: [],
                     rating: starRating,
-                    timestamp: Timestamp.now(), // Use Firebase Timestamp
+                    timestamp: Timestamp.now(),
                     likes: 0,
                     comments: 0,
                     shares: 0
                 };
 
                 await addDoc(reviewsCollectionRef, newReview);
-                // Replaced alert with console.log for better UX
                 console.log('รีวิวของคุณถูกโพสต์แล้ว!');
                 setReviewText('');
                 setStarRating(0);
@@ -1558,8 +1277,7 @@ const App = () => {
                                 {submitLoading ? (
                                     <span className="flex items-center justify-center">
                                         <svg className="animate-spin h-5 w-5 mr-3 text-white" viewBox="0 0 24 24">
-                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                         </svg>
                                         กำลังโพสต์...
                                     </span>
@@ -1637,8 +1355,6 @@ const App = () => {
 
         useEffect(() => {
             if (!db || !isAuthReady || !publicRestaurantsRef) {
-                // If Firebase is not ready or no public ref, set loading to false and return.
-                // This means data won't be fetched, but the UI won't be stuck loading.
                 setLoading(false);
                 return;
             };
@@ -1667,27 +1383,26 @@ const App = () => {
             }).catch(e => console.error("Error checking restaurants collection:", e));
 
             return () => unsubscribeRestaurants();
-        }, [db, isAuthReady, userId, appId, publicRestaurantsRef]); // Added publicRestaurantsRef to dependency array
+        }, [db, isAuthReady, userId, appId, publicRestaurantsRef]);
 
         useEffect(() => {
             if (!db || !isAuthReady || !privateBookmarksRef || userId === 'anonymous') {
-                setBookmarkedRestaurants([]); // Clear bookmarks if not authenticated or anonymous
+                setBookmarkedRestaurants([]);
                 return;
             }
 
             const unsubscribeBookmarks = onSnapshot(privateBookmarksRef, (snapshot) => {
-                const bookmarks = snapshot.docs.map(doc => doc.id); // Store only IDs of bookmarked restaurants
+                const bookmarks = snapshot.docs.map(doc => doc.id);
                 setBookmarkedRestaurants(bookmarks);
             }, (err) => {
                 console.error("Failed to fetch bookmarks:", err);
             });
 
             return () => unsubscribeBookmarks();
-        }, [db, isAuthReady, userId, appId, privateBookmarksRef]); // Added privateBookmarksRef to dependency array
+        }, [db, isAuthReady, userId, appId, privateBookmarksRef]);
 
         const toggleBookmark = async (restaurantId) => {
             if (!privateBookmarksRef || userId === 'anonymous') {
-                // Replaced alert with console.log
                 console.log('กรุณาเข้าสู่ระบบเพื่อบันทึกร้านโปรด');
                 return;
             }
@@ -1700,12 +1415,11 @@ const App = () => {
                     await deleteDoc(bookmarkDocRef);
                     console.log(`Removed bookmark for ${restaurantId}`);
                 } else {
-                    await setDoc(bookmarkDocRef, { timestamp: new Date() }); // Store a timestamp
+                    await setSetDoc(bookmarkDocRef, { timestamp: new Date() });
                     console.log(`Added bookmark for ${restaurantId}`);
                 }
             } catch (e) {
                 console.error("Error toggling bookmark:", e);
-                // Replaced alert with console.log
                 console.log('เกิดข้อผิดพลาดในการบันทึกร้านโปรด');
             }
         };
@@ -1716,7 +1430,6 @@ const App = () => {
                                   restaurant.popularMenus.some(menu => menu.name.toLowerCase().includes(searchTerm.toLowerCase()));
             const matchesProvince = selectedProvince === '' || restaurant.province === selectedProvince;
             const matchesFoodType = selectedFoodType === '' || restaurant.type === selectedFoodType;
-            // Add more filter logic for price range, parking, etc.
             return matchesSearch && matchesProvince && matchesFoodType;
         });
 
@@ -1859,7 +1572,6 @@ const App = () => {
                 if (snapshot.empty) {
                     mockOtopProducts.forEach(async (prod) => {
                         try {
-                            // Ensure document ID is set to prod.id for consistent data
                             await setDoc(doc(publicOtopRef, prod.id), prod);
                             console.log(`Added mock OTOP product: ${prod.name}`);
                         } catch (e) {
@@ -1870,15 +1582,14 @@ const App = () => {
             }).catch(e => console.error("Error checking OTOP products collection:", e));
 
             return () => unsubscribe();
-        }, [db, isAuthReady, userId, appId, publicOtopRef]); // Added publicOtopRef to dependency array
+        }, [db, isAuthReady, userId, appId, publicOtopRef]);
 
         const filteredOtopProducts = otopProducts.filter(product => {
             const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                                   product.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
                                   product.origin.toLowerCase().includes(searchTerm.toLowerCase());
-            const matchesProvince = selectedProvince === '' || product.origin.includes(selectedProvince); // Assuming origin contains province
+            const matchesProvince = selectedProvince === '' || product.origin.includes(selectedProvince);
             const matchesCategory = selectedCategory === '' || product.category === selectedCategory;
-            // Add more filter logic for price range, OTOP 5 stars, etc.
             return matchesSearch && matchesProvince && matchesCategory;
         });
 
@@ -1920,7 +1631,6 @@ const App = () => {
                             <option value="ของฝาก / งานหัตถกรรม">ของฝาก / งานหัตถกรรม</option>
                             <option value="สินค้าชุมชนตามฤดูกาล">สินค้าชุมชนตามฤดูกาล</option>
                         </select>
-                        {/* More filters */}
                     </div>
 
                     {/* OTOP Products Grid */}
@@ -1971,7 +1681,7 @@ const App = () => {
     };
 
     // Reviews Page
-    const ReviewsPage = ({ appId }) => { // Receive appId as prop
+    const ReviewsPage = ({ appId }) => {
         const [reviewText, setReviewText] = useState('');
         const [reviewImages, setReviewImages] = useState([]);
         const [reviewVideos, setReviewVideos] = useState([]);
@@ -1979,8 +1689,8 @@ const App = () => {
         const [submitLoading, setSubmitLoading] = useState(false);
         const [submitError, setSubmitError] = useState('');
         const [reviews, setReviews] = useState([]);
-        const [summaries, setSummaries] = useState({}); // To store AI summaries for each review
-        const [summaryLoading, setSummaryLoading] = useState({}); // Loading state for summaries
+        const [summaries, setSummaries] = useState({});
+        const [summaryLoading, setSummaryLoading] = useState({});
         const imageInputRef = useRef(null);
         const videoInputRef = useRef(null);
 
@@ -1992,14 +1702,13 @@ const App = () => {
 
             const unsubscribe = onSnapshot(publicReviewsRef, (snapshot) => {
                 const fetchedReviews = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                // Sort by latest by default
                 setReviews(fetchedReviews.sort((a, b) => b.timestamp?.toDate() - a.timestamp?.toDate()));
             }, (err) => {
                 console.error("Failed to fetch reviews:", err);
             });
 
             return () => unsubscribe();
-        }, [db, isAuthReady, userId, appId, publicReviewsRef]); // Added publicReviewsRef to dependency array
+        }, [db, isAuthReady, userId, appId, publicReviewsRef]);
 
         const checkReviewSafety = async (text) => {
             if (!text.trim()) return { is_safe: true, reason: 'No text to check.' };
@@ -2022,7 +1731,7 @@ const App = () => {
                     }
                 }
             };
-            const apiKey = ""; // Canvas will provide this. Do not set your actual key here.
+            const apiKey = "AIzaSyCRJeE997JfqEIzct8Qet9Fk9gYoZ1OOIs"; // Gemini API Key
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
             try {
@@ -2048,7 +1757,7 @@ const App = () => {
         };
 
         const getReviewSummary = async (reviewId, text) => {
-            if (summaries[reviewId]) return; // Already summarized
+            if (summaries[reviewId]) return;
             setSummaryLoading(prev => ({ ...prev, [reviewId]: true }));
 
             const prompt = `สรุปเนื้อหารีวิวต่อไปนี้ให้กระชับและได้ใจความสำคัญในภาษาไทย:\n\n"${text}"`;
@@ -2068,7 +1777,7 @@ const App = () => {
                     }
                 }
             };
-            const apiKey = ""; // Canvas will provide this. Do not set your actual key here.
+            const apiKey = "AIzaSyCRJeE997JfqEIzct8Qet9Fk9gYoZ1OOIs"; // Gemini API Key
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
             try {
@@ -2101,29 +1810,22 @@ const App = () => {
             const files = Array.from(e.target.files);
             const newImages = files.filter(file => ['image/jpeg', 'image/png', 'image/webp'].includes(file.type));
             if (newImages.length > 0) {
-                // For a real app, you'd upload these to Firebase Storage and save URLs
-                // For demo, just store file objects (they won't persist on refresh)
                 setReviewImages(prev => [...prev, ...newImages]);
-                // Replaced alert with console.log
                 console.log(`เพิ่มรูปภาพ ${newImages.length} รูป (จำลองการอัปโหลด)`);
             } else {
-                // Replaced alert with console.log
                 console.log('รองรับเฉพาะไฟล์รูปภาพ (jpg, png, webp) เท่านั้น');
             }
         };
 
         const handleVideoUpload = (e) => {
             const files = Array.from(e.target.files);
-            const newVideos = files.filter(file => ['video/mp4', 'video/mov'].includes(file.type) && file.size <= 50 * 1024 * 1024); // 50MB
+            const newVideos = files.filter(file => ['video/mp4', 'video/mov'].includes(file.type) && file.size <= 50 * 1024 * 1024);
             if (newVideos.length > 0 && reviewVideos.length + newVideos.length <= 3) {
                 setReviewVideos(prev => [...prev, ...newVideos]);
-                // Replaced alert with console.log
                 console.log(`เพิ่มวิดีโอ ${newVideos.length} คลิป (จำลองการอัปโหลด)`);
             } else if (reviewVideos.length + newVideos.length > 3) {
-                // Replaced alert with console.log
                 console.log('อัปโหลดวิดีโอได้สูงสุด 3 คลิปต่อรีวิว');
             } else {
-                // Replaced alert with console.log
                 console.log('รองรับเฉพาะไฟล์วิดีโอ (mp4, mov) และขนาดไม่เกิน 50MB ต่อคลิป');
             }
         };
@@ -2145,7 +1847,6 @@ const App = () => {
             setSubmitLoading(true);
             setSubmitError('');
 
-            // ✨ AI-powered content moderation
             if (reviewText.trim()) {
                 const moderationResult = await checkReviewSafety(reviewText);
                 if (!moderationResult.is_safe) {
@@ -2157,8 +1858,6 @@ const App = () => {
 
 
             try {
-                // If publicReviewsRef is null, it means Firebase wasn't initialized properly or db is null.
-                // In a real app, you'd want to handle this more robustly (e.g., show an error message instead of crashing).
                 if (!publicReviewsRef) {
                     setSubmitError('Firebase Firestore is not initialized. Cannot submit review.');
                     setSubmitLoading(false);
@@ -2168,28 +1867,24 @@ const App = () => {
                 const newReview = {
                     reviewerId: userId,
                     reviewerName: user.displayName || user.email || `ผู้ใช้ ${userId.substring(0, 8)}...`,
-                    reviewerProfilePic: 'https://placehold.co/50x50/B0B0B0/000?text=👤', // Placeholder
+                    reviewerProfilePic: 'https://placehold.co/50x50/B0B0B0/000?text=👤',
                     text: reviewText,
-                    images: reviewImages.map(f => URL.createObjectURL(f)), // For demo, use object URLs
-                    videos: reviewVideos.map(f => URL.createObjectURL(f)), // For demo, use object URLs
+                    images: reviewImages.map(f => URL.createObjectURL(f)),
+                    videos: reviewVideos.map(f => URL.createObjectURL(f)),
                     rating: starRating,
-                    detailedRating: { atmosphere: starRating, value: starRating, service: starRating, convenience: starRating }, // Simplified for demo
-                    timestamp: Timestamp.now(), // Use Firebase Timestamp
+                    detailedRating: { atmosphere: starRating, value: starRating, service: starRating, convenience: starRating },
+                    timestamp: Timestamp.now(),
                     likes: 0,
                     comments: 0,
                     shares: 0
                 };
 
-                // Add review to public collection
-                const docRef = await addDoc(publicReviewsRef, newReview); // Store the document reference
-                // Optionally, add a reference to private collection if user wants to manage their own reviews
+                const docRef = await addDoc(publicReviewsRef, newReview);
                 if (privateReviewsRef) {
-                    await setDoc(doc(privateReviewsRef, docRef.id), { timestamp: newReview.timestamp }); // Use the same doc ID
+                    await setDoc(doc(privateReviewsRef, docRef.id), { timestamp: newReview.timestamp });
                 }
 
-                // Replaced alert with console.log
                 console.log('รีวิวของคุณถูกโพสต์แล้ว!');
-                // Clear form
                 setReviewText('');
                 setReviewImages([]);
                 setReviewVideos([]);
@@ -2283,8 +1978,7 @@ const App = () => {
                             {submitLoading ? (
                                 <span className="flex items-center justify-center">
                                     <svg className="animate-spin h-5 w-5 mr-3 text-white" viewBox="0 0 24 24">
-                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                     </svg>
                                     กำลังโพสต์...
                                 </span>
@@ -2325,7 +2019,7 @@ const App = () => {
                                             ))}
                                         </div>
                                     )}
-                                    {/* ✨ AI-powered review summarization */}
+                                    {/* AI-powered review summarization */}
                                     {review.text && (
                                         <div className="mt-4">
                                             <button
@@ -2363,19 +2057,14 @@ const App = () => {
     };
 
 
-    // Main App rendering logic
     return (
-        // NOTE: Added pb-24 to prevent content from being hidden by the bottom navbar
         <div className="App pb-24" style={{ fontFamily: "'Prompt', sans-serif" }}>
             <style>
                 {`
                 @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap');
-                /* Fallback for Fc Inconnic if not available */
-                /* For production, consider self-hosting Fc Inconnic or using a reliable CDN */
                 `}
             </style>
 
-            {/* Conditional page rendering */}
             {!isAuthReady ? (
                 <div className="min-h-screen flex items-center justify-center bg-gray-100 text-gray-700 text-2xl font-['Prompt']">
                     กำลังเตรียมแอปพลิเคชัน...
@@ -2383,7 +2072,6 @@ const App = () => {
             ) : (
                 <>
                     {currentPage === 'home' && <HomePage />}
-                    {currentPage === 'login' && <LoginPage />}
                     {currentPage === 'dashboard' && user && <DashboardPage />}
                     {currentPage === 'attractions' && user && (
                         <AttractionsPage
@@ -2397,28 +2085,14 @@ const App = () => {
                     )}
                     {currentPage === 'restaurants' && user && <RestaurantsPage />}
                     {currentPage === 'otop' && user && <OtopPage />}
-                    {currentPage === 'reviews' && user && <ReviewsPage appId={appId} />} {/* Pass appId to ReviewsPage */}
-
-                    {/* Redirect to home/login if user is not authenticated and trying to access a protected page */}
-                    {isAuthReady && !user && (currentPage === 'dashboard' || currentPage === 'attractions' || currentPage === 'restaurants' || currentPage === 'otop' || currentPage === 'reviews') && (
-                        <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100 text-gray-700 text-2xl font-['Prompt'] p-4 text-center">
-                            <p className="mb-4">คุณยังไม่ได้เข้าสู่ระบบ กรุณาเข้าสู่ระบบก่อน</p>
-                            <button
-                                onClick={() => setCurrentPage('login')}
-                                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-full shadow-lg transition duration-300 hover:scale-105 text-xl"
-                            >
-                                ไปยังหน้าเข้าสู่ระบบ
-                            </button>
-                        </div>
-                    )}
+                    {currentPage === 'reviews' && user && <ReviewsPage appId={appId} />}
                 </>
             )}
 
-            {/* Render Navbar if user is logged in */}
-            {user && <Navbar />}
+            {/* Navbar is always rendered since user is always signed in anonymously */}
+            <Navbar />
         </div>
     );
 };
 
 export default App;
-�
