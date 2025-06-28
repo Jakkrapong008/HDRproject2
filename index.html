@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'; // Added useCallback
 
 // Firebase configuration and imports
+// Make sure to install Firebase: npm install firebase
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, getDocs, Timestamp } from 'firebase/firestore'; // Corrected Firebase import
 
-// Mock data for initial setup
+// Mock data for initial setup (These can be removed once real data is in Firebase)
 const mockFestivals = [
     {
         id: 'f1',
@@ -190,7 +191,7 @@ const mockOtopProducts = [
             line: 'https://lin.ee/o47Txru', facebook: 'https://www.facebook.com/ThaiSilkLamphun/?locale=th_TH', phone: '0812345678', shopee: '#', lazada: '#', website: 'https://lamphunthaisilk.com/',
             physicalStore: 'https://maps.app.goo.gl/lamphun-silk'
         },
-        images: ['https://scontent.fcnx3-1.fna.fbcdn.net/v/t39.30808-6/484322737_957328663240823_6212818639101693774_n.jpg?_nc_cat=110&ccb=1-7&_nc_sid=cc71e4&_nc_eui2=AeFlx5EuLw3sxHc_VJ_SrL_ffdZ5e8fms9V91nl7x-az1QoqgRn6a-F1BCz7MoK6CiFEKET6Xvks05Axtrc6SDBM&_nc_ohc=JXRkAxmNfngQ7kNvwFZPpVx&_nc_oc=AdmR72BYpgPz69n2lPI6p_p521sINBFw57ICArRwqmI1f_K_6yQFXk0agi-0DnrgBce-YFPTfkTguwFvMozKIRhd&_nc_zt=23&_nc_ht=scontent.fcnx3-1.fna&_nc_gid=WG5E9j-uQuI-CAsI9zuuag&oh=00_AfPDD9OiNc0umbo-vK8yI8YbQcDJd2gg7dr8hVesljuowg&oe=686453B6'],
+        images: ['https://scontent.fcnx3-1.fna.fbcdn.net/v/t39.30808-6/484322737_957328663240823_6212818639101693774_n.jpg?_nc_cat=110&ccb=1-7&_nc_sid=cc71e4&_nc_eui2=AeFlx5EuLw3sxHc_VJ_SrL_ffdZ5e8fms9V91nl7x-az1QoqgRn6a-F1BCz7MoK6CiFEKET6Xvks05Axtrc6SDBM&_nc_ohc=JXRkAxmNfngQ7kNvwFZPpVx&_nc_oc=AdmR72BYpgPz69n2lPI6p_p521sINBFw57ICArRwqmI1f_K_6yQFXk0agi-0DnrgBce-YFPTfkTguwFvMozIRhd&_nc_zt=23&_nc_ht=scontent.fcnx3-1.fna&_nc_gid=WG5E9j-uQuI-CAsI9zuuag&oh=00_AfPDD9OiNc0umbo-vK8yI8YbQcDJd2gg7dr8hVesljuowg&oe=686453B6'],
         rating: 5,
         canOrderOnline: true
     },
@@ -215,11 +216,13 @@ const mockOtopProducts = [
 
 // Main App Component
 const App = () => {
-    // Retrieve __app_id from the global scope ONCE at the top level
-    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    // Retrieve __app_id from the global scope. If not defined, use a default ID.
+    // This allows the app to run outside of the Canvas environment, but Firebase functionality
+    // will require proper configuration via environment variables or a .env file.
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-travel-app';
 
     // State to manage current page view
-    const [currentPage, setCurrentPage] = useState('home'); 
+    const [currentPage, setCurrentPage] = useState('home');
     // Firebase state variables
     const [db, setDb] = useState(null);
     const [auth, setAuth] = useState(null);
@@ -235,15 +238,24 @@ const App = () => {
     // Initialize Firebase
     useEffect(() => {
         try {
-            // Retrieve __firebase_config from the global scope
+            // Retrieve __firebase_config from the global scope.
+            // In a real deployed app, you would use environment variables like:
+            // const firebaseConfig = {
+            //   apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
+            //   authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
+            //   projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
+            //   storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
+            //   messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
+            //   appId: process.env.REACT_APP_FIREBASE_APP_ID
+            // };
             const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
 
-            if (!firebaseConfig) {
-                console.error("Firebase config is not available. Please ensure __firebase_config is set.");
-                return;
+            if (!firebaseConfig || !firebaseConfig.apiKey) {
+                console.warn("Firebase config is not fully available. Firebase features may not work. Ensure __firebase_config is set or use environment variables.");
+                // We will still initialize app but expect errors if functions are called without proper config
             }
 
-            const app = initializeApp(firebaseConfig);
+            const app = initializeApp(firebaseConfig || {}); // Initialize with empty object if config is null
             const firestore = getFirestore(app);
             const authentication = getAuth(app);
 
@@ -509,7 +521,8 @@ const App = () => {
                 className={`flex items-center justify-center w-full py-3 px-4 rounded-xl shadow-md transition duration-300 hover:scale-[1.02] ${bgColor} ${hoverBgColor} text-white font-bold mb-3 font-['Prompt']`}
                 onClick={() => {
                     setError('');
-                    alert(`เข้าสู่ระบบด้วย ${text} (ฟังก์ชันนี้จำลองขึ้น)`);
+                    // Replaced alert with console.log as alerts are not good for UI/UX
+                    console.log(`เข้าสู่ระบบด้วย ${text} (ฟังก์ชันนี้จำลองขึ้น)`);
                     // In a real app, trigger Firebase Social Auth (e.g., signInWithPopup for Google/Facebook)
                     // For mock, just navigate to dashboard
                     handleLoginSuccess({ uid: `mock_${text.toLowerCase()}_user`, displayName: `${text} User` });
@@ -638,7 +651,7 @@ const App = () => {
                             hoverBgColor="hover:bg-red-700"
                         />
                         <SocialLoginButton
-                            icon={<svg className="h-6 w-6" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path fillRule="evenodd" d="M12 0c-3.376 0-3.797.016-5.137.076-1.34.06-2.203.27-2.98.585-.748.308-1.456.723-2.112 1.379-.656.656-1.071 1.364-1.379 2.112-.315.777-.525 1.64-.585 2.98-.06 1.34-.076 1.761-.076 5.137s.016 3.797.076 5.137c.06 1.34.27 2.203.585 2.98.308.748.723 1.456 1.379 2.112.656.656 1.364 1.071 2.112 1.379.777.315 1.64.525 2.98.585 1.34.06 1.761.076 5.137.076s3.797-.016 5.137-.076c1.34-.06 2.203-.27 2.98-.585.748-.308 1.456-.723 2.112-1.379.656.656 1.071 1.364 1.379-2.112.315-.777-.525 1.64-.585 2.98.06-1.34.076-1.761.076-5.137s-.016-3.797-.076-5.137c-.06-1.34-.27-2.203-.585-2.98-.308-.748-.723-1.456-1.379-2.112-.656-.656-1.071-1.364-2.112-1.379-.777-.315-1.64-.525-2.98-.585-1.34-.06-1.761-.076-5.137-.076zm0 2.247c3.267 0 3.659.013 4.949.071 1.29.057 1.954.254 2.428.441.442.17.8.384 1.157.741.357.357.571.715.741 1.157.187.474.384 1.138.441 2.428.058 1.29.071 1.682.071 4.949s-.013 3.659-.071 4.949c-.057 1.29-.254 1.954-.441 2.428-.17.442-.384.8-.741 1.157-.357.357-.715.571-1.157.741-.474.187-1.138.384-2.428.441-1.29.058-1.682.071-4.949.071s-3.659-.013-4.949-.071c-1.29-.057-1.954-.254-2.428-.441-.442-.17-.8-.384-1.157-.741-.357.357-.715.571-.741-1.157-.187-.474-.384-1.138-.441-2.428-.058-1.29-.071-1.682-.071-4.949s.013-3.659.071-4.949c.057-1.29.254-1.954.441-2.428.17-.442.384-.8.741-1.157.357.357.715.571.741-1.157.187-.474-.384-1.138-.441-2.428-.058-1.29-.071-1.682-.071-4.949zm0 3.682a6.071 6.071 0 100 12.142 6.071 6.071 0 000-12.142zm0 2.247a3.824 3.824 0 110 7.648 3.824 3.824 0 010-7.648zm7.329-3.953a.904.904 0 100 1.808.904.904 0 000-1.808z"/></svg>}
+                            icon={<svg className="h-6 w-6" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path fillRule="evenodd" d="M12 0c-3.376 0-3.797.016-5.137.076-1.34.06-2.203.27-2.98.585-.748.308-1.456.723-2.112 1.379-.656.656-1.071 1.364-1.379 2.112-.315.777-.525 1.64-.585 2.98-.06 1.34-.076 1.761-.076 5.137s.016 3.797.076 5.137c.06 1.34.27 2.203.585 2.98.308.748.723 1.456 1.379 2.112.656.656 1.364 1.071 1.379 2.112-.777.315-1.64.525-2.98.585-1.34.06-1.761.076-5.137.076s3.797-.016 5.137-.076c1.34-.06 2.203-.27 2.98-.585.748-.308 1.456-.723 2.112-1.379.656-.656 1.071-1.364 1.379-2.112.315-.777-.525 1.64-.585 2.98.06-1.34.076-1.761.076-5.137s-.013-3.659-.071-4.949c-.057-1.29-.254-1.954-.441-2.428-.17-.442-.384-.8-.741-1.157-.357-.357-.715-.571-.741-1.157-.187-.474-.384-1.138-.441-2.428-.058-1.29-.071-1.682-.071-4.949z"/></svg>}
                             text="Instagram"
                             bgColor="bg-gradient-to-tr from-yellow-400 via-red-500 to-pink-600"
                             hoverBgColor="hover:from-yellow-500 hover:via-red-600 hover:to-pink-700"
@@ -648,7 +661,7 @@ const App = () => {
                     <p className="text-center text-gray-600 mt-6 text-lg">
                         ยังไม่มีบัญชี?{' '}
                         <button
-                            onClick={() => alert('นำไปยังหน้าสมัครใช้งาน (ยังไม่สร้าง)')} // Mock navigation
+                            onClick={() => console.log('นำไปยังหน้าสมัครใช้งาน (ยังไม่สร้าง)')} // Mock navigation
                             className="text-blue-600 hover:underline font-bold focus:outline-none"
                         >
                             สมัครใช้งาน
@@ -669,7 +682,7 @@ const App = () => {
         const [aiSuggestion, setAiSuggestion] = useState(null);
         const [aiLoading, setAiLoading] = useState(false);
         const [aiError, setAiError] = useState('');
-        
+
         // NEW: State for multiple trip styles
         const [tripStyles, setTripStyles] = useState({
             fastest: false,
@@ -695,7 +708,7 @@ const App = () => {
             { id: 'photography', label: 'เน้นถ่ายรูป', icon: '📸' },
             { id: 'shopping', label: 'เน้นช้อปปิ้ง', icon: '🛍️' },
         ];
-        
+
         // New states for interactive trip builder
         const [suggestedPlaces, setSuggestedPlaces] = useState([]);
         const [selectedPlaces, setSelectedPlaces] = useState([]);
@@ -771,6 +784,8 @@ const App = () => {
                     }
                 }
             };
+            // API key for Gemini 2.0 Flash - this will be automatically provided by the Canvas environment.
+            // DO NOT replace with your actual API key here for GitHub. It should be handled securely as environment variable.
             const apiKey = "";
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
@@ -821,27 +836,31 @@ const App = () => {
             }
             setSelectedPlaces(newOrder);
         };
-        
+
         const handleLoadMore = async () => {
-            alert('กำลังค้นหาสถานที่เพิ่มเติมด้วย AI...');
+            // Replaced alert with console.log for better UX
+            console.log('กำลังค้นหาสถานที่เพิ่มเติมด้วย AI...');
             const morePlacesPrompt = `จากแผนการเดินทางไป ${destination}, ช่วยแนะนำสถานที่ท่องเที่ยว, ร้านอาหาร, หรือคาเฟ่เพิ่มเติมที่น่าสนใจและอยู่นอกเหนือจากแผนเดิมอีก 3 แห่ง`;
             const morePlaces = [
                 { id: `extra-attr-${Math.random()}`, name: 'สวนสาธารณะเพิ่มเติม (จำลอง)', description: 'สวนสวยสำหรับพักผ่อน', type: 'attraction' },
                 { id: `extra-rest-${Math.random()}`, name: 'ร้านก๋วยเตี๋ยวแนะนำ (จำลอง)', description: 'ก๋วยเตี๋ยวเรือรสเด็ด', type: 'restaurant' },
             ];
             setSuggestedPlaces(prev => [...prev, ...morePlaces]);
-            alert('โหลดรายการเพิ่มเติมแล้ว');
+            // Replaced alert with console.log for better UX
+            console.log('โหลดรายการเพิ่มเติมแล้ว');
         };
 
         const handleSummarizeRoute = () => {
             if (selectedPlaces.length < 1) {
-                alert('กรุณาเลือกอย่างน้อย 1 สถานที่เพื่อสร้างเส้นทาง');
+                // Replaced alert with console.log for better UX
+                console.log('กรุณาเลือกอย่างน้อย 1 สถานที่เพื่อสร้างเส้นทาง');
                 return;
             }
             const waypoints = selectedPlaces.map(p => encodeURIComponent(p.name)).join('/');
             const googleMapsUrl = `https://www.google.com/maps/dir/${encodeURIComponent(origin)}/${waypoints}/${encodeURIComponent(destination)}`;
-            
-            alert(`เส้นทางของคุณพร้อมแล้ว! กำลังเปิด Google Maps...`);
+
+            // Replaced alert with console.log for better UX, and directly open link
+            console.log(`เส้นทางของคุณพร้อมแล้ว! กำลังเปิด Google Maps...`);
             window.open(googleMapsUrl, '_blank');
             console.log("Generated Route URL:", googleMapsUrl);
         };
@@ -984,6 +1003,7 @@ const App = () => {
                     <section className="bg-white p-8 rounded-2xl shadow-xl border border-green-200 mt-10">
                         <h3 className="text-3xl font-semibold text-green-700 mb-6 border-b pb-3">ระบบคำนวณการเดินทาง (เปรียบเทียบ)</h3>
                         {/* Content from original component... */}
+                        <p className="text-gray-600">ส่วนนี้เป็นส่วนจำลองการคำนวณเส้นทางและค่าใช้จ่าย ซึ่งสามารถพัฒนาเพิ่มเติมในอนาคต</p>
                     </section>
                 </div>
             </div>
@@ -1014,7 +1034,7 @@ const App = () => {
             if (!db || !isAuthReady) return; // Wait for Firebase to be ready
 
             const publicAttractionsRef = collection(db, `artifacts/${appId}/public/data/attractions`);
-            
+
             const unsubscribe = onSnapshot(publicAttractionsRef, (snapshot) => {
                 const fetchedAttractions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 setAttractions(fetchedAttractions);
@@ -1031,6 +1051,7 @@ const App = () => {
                     if (snapshot.empty) {
                         mockAttractions.forEach(async (attr) => {
                             try {
+                                // Ensure document ID is set to attr.id for consistent data
                                 await setDoc(doc(publicAttractionsRef, attr.id), attr);
                                 console.log(`Added mock attraction: ${attr.name}`);
                             } catch (e) {
@@ -1084,7 +1105,7 @@ const App = () => {
                     {/* NEW: Festivals Section */}
                     <section className="mb-12">
                         <h3 className="text-2xl md:text-3xl font-bold text-blue-700 mb-6 text-center">🎉 งานเทศกาลที่น่าสนใจทั่วประเทศ</h3>
-                        
+
                         {/* Animated Slideshow */}
                         <div className="relative w-full max-w-4xl mx-auto h-64 md:h-96 rounded-2xl shadow-2xl overflow-hidden mb-8">
                             <div
@@ -1123,9 +1144,9 @@ const App = () => {
                         <div className="space-y-6">
                             {upcomingFestivals.map(festival => (
                                 <div key={festival.id} className="bg-white rounded-2xl shadow-lg overflow-hidden flex flex-col md:flex-row items-center transform transition-all duration-300 hover:scale-[1.02] hover:shadow-xl">
-                                    <img 
-                                        src={festival.image} 
-                                        alt={festival.name} 
+                                    <img
+                                        src={festival.image}
+                                        alt={festival.name}
                                         className="w-full md:w-1/3 h-48 md:h-full object-cover"
                                         onError={(e) => { e.target.onerror = null; e.target.src="https://placehold.co/400x250/E0E0E0/000?text=No+Image"; }}
                                     />
@@ -1134,11 +1155,11 @@ const App = () => {
                                         <p className="text-gray-600 mb-2"><strong>🗓️ วันที่:</strong> {festival.dates}</p>
                                         <p className="text-gray-600 mb-2"><strong>⏰ เวลา:</strong> {festival.time}</p>
                                         <p className="text-gray-600 mb-4">
-                                            <strong>📍 สถานที่:</strong> {festival.location} 
+                                            <strong>📍 สถานที่:</strong> {festival.location}
                                             <a href={festival.googleMapsLink} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline ml-2 font-semibold">(แผนที่)</a>
                                         </p>
-                                        <button 
-                                            onClick={() => alert(`ดูรายละเอียดเพิ่มเติมของงาน ${festival.name}`)}
+                                        <button
+                                            onClick={() => console.log(`ดูรายละเอียดเพิ่มเติมของงาน ${festival.name}`)} // Replaced alert
                                             className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-full transition duration-300 shadow-md hover:shadow-lg"
                                         >
                                             ดูเพิ่มเติม
@@ -1150,7 +1171,7 @@ const App = () => {
                     </section>
 
                     <hr className="my-12 border-t-2 border-gray-200" />
-                    
+
                     {/* Attractions Section */}
                     <h3 className="text-2xl md:text-3xl font-bold text-green-700 mb-6 text-center">🏞️ ค้นหาสถานที่ท่องเที่ยว</h3>
                     {/* Search & Filter */}
@@ -1256,7 +1277,7 @@ const App = () => {
                     }
                 }
             };
-            const apiKey = "";
+            const apiKey = ""; // Canvas will provide this. Do not set your actual key here.
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
             try {
@@ -1303,7 +1324,7 @@ const App = () => {
                     }
                 }
             };
-            const apiKey = "";
+            const apiKey = ""; // Canvas will provide this. Do not set your actual key here.
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
             try {
@@ -1403,7 +1424,8 @@ const App = () => {
                 };
 
                 await addDoc(reviewsCollectionRef, newReview);
-                alert('รีวิวของคุณถูกโพสต์แล้ว!');
+                // Replaced alert with console.log for better UX
+                console.log('รีวิวของคุณถูกโพสต์แล้ว!');
                 setReviewText('');
                 setStarRating(0);
             } catch (err) {
@@ -1612,7 +1634,12 @@ const App = () => {
         const privateBookmarksRef = db && userId !== 'anonymous' ? collection(db, `artifacts/${appId}/users/${userId}/bookmarkedRestaurants`) : null;
 
         useEffect(() => {
-            if (!db || !isAuthReady || !publicRestaurantsRef) return;
+            if (!db || !isAuthReady || !publicRestaurantsRef) {
+                // If Firebase is not ready or no public ref, set loading to false and return.
+                // This means data won't be fetched, but the UI won't be stuck loading.
+                setLoading(false);
+                return;
+            };
 
             const unsubscribeRestaurants = onSnapshot(publicRestaurantsRef, (snapshot) => {
                 const fetchedRestaurants = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -1638,7 +1665,7 @@ const App = () => {
             }).catch(e => console.error("Error checking restaurants collection:", e));
 
             return () => unsubscribeRestaurants();
-        }, [db, isAuthReady, userId, appId]); // Added appId to dependency array
+        }, [db, isAuthReady, userId, appId, publicRestaurantsRef]); // Added publicRestaurantsRef to dependency array
 
         useEffect(() => {
             if (!db || !isAuthReady || !privateBookmarksRef || userId === 'anonymous') {
@@ -1654,11 +1681,12 @@ const App = () => {
             });
 
             return () => unsubscribeBookmarks();
-        }, [db, isAuthReady, userId, appId]); // Added appId to dependency array
+        }, [db, isAuthReady, userId, appId, privateBookmarksRef]); // Added privateBookmarksRef to dependency array
 
         const toggleBookmark = async (restaurantId) => {
             if (!privateBookmarksRef || userId === 'anonymous') {
-                alert('กรุณาเข้าสู่ระบบเพื่อบันทึกร้านโปรด');
+                // Replaced alert with console.log
+                console.log('กรุณาเข้าสู่ระบบเพื่อบันทึกร้านโปรด');
                 return;
             }
 
@@ -1675,7 +1703,8 @@ const App = () => {
                 }
             } catch (e) {
                 console.error("Error toggling bookmark:", e);
-                alert('เกิดข้อผิดพลาดในการบันทึกร้านโปรด');
+                // Replaced alert with console.log
+                console.log('เกิดข้อผิดพลาดในการบันทึกร้านโปรด');
             }
         };
 
@@ -1809,7 +1838,10 @@ const App = () => {
         const publicOtopRef = db ? collection(db, `artifacts/${appId}/public/data/otopProducts`) : null;
 
         useEffect(() => {
-            if (!db || !isAuthReady || !publicOtopRef) return;
+            if (!db || !isAuthReady || !publicOtopRef) {
+                setLoading(false);
+                return;
+            };
 
             const unsubscribe = onSnapshot(publicOtopRef, (snapshot) => {
                 const fetchedProducts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -1825,6 +1857,7 @@ const App = () => {
                 if (snapshot.empty) {
                     mockOtopProducts.forEach(async (prod) => {
                         try {
+                            // Ensure document ID is set to prod.id for consistent data
                             await setDoc(doc(publicOtopRef, prod.id), prod);
                             console.log(`Added mock OTOP product: ${prod.name}`);
                         } catch (e) {
@@ -1833,9 +1866,9 @@ const App = () => {
                     });
                 }
             }).catch(e => console.error("Error checking OTOP products collection:", e));
-            
+
             return () => unsubscribe();
-        }, [db, isAuthReady, userId, appId]); // Added appId to dependency array
+        }, [db, isAuthReady, userId, appId, publicOtopRef]); // Added publicOtopRef to dependency array
 
         const filteredOtopProducts = otopProducts.filter(product => {
             const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -1909,15 +1942,15 @@ const App = () => {
                                         แหล่งผลิต: {product.producer}, {product.origin}
                                     </p>
                                     <div className="flex flex-wrap gap-2 mt-3">
-                                        <button onClick={() => alert(`เพิ่ม ${product.name} ลงตะกร้า (จำลอง)`)} className="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-full text-sm">
+                                        <button onClick={() => console.log(`เพิ่ม ${product.name} ลงตะกร้า (จำลอง)`)} className="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-full text-sm">
                                             เพิ่มลงตระกร้า
                                         </button>
                                         {product.canOrderOnline && (
-                                            <button onClick={() => alert(`สั่งออนไลน์ ${product.name} (จำลอง)`)} className="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-full text-sm">
+                                            <button onClick={() => console.log(`สั่งออนไลน์ ${product.name} (จำลอง)`)} className="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-full text-sm">
                                                 สั่งออนไลน์
                                             </button>
                                         )}
-                                        <button onClick={() => alert(`แชร์ ${product.name} (จำลอง)`)} className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded-full text-sm">
+                                        <button onClick={() => console.log(`แชร์ ${product.name} (จำลอง)`)} className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded-full text-sm">
                                             แชร์
                                         </button>
                                     </div>
@@ -1964,7 +1997,7 @@ const App = () => {
             });
 
             return () => unsubscribe();
-        }, [db, isAuthReady, userId, appId]); // Added appId to dependency array
+        }, [db, isAuthReady, userId, appId, publicReviewsRef]); // Added publicReviewsRef to dependency array
 
         const checkReviewSafety = async (text) => {
             if (!text.trim()) return { is_safe: true, reason: 'No text to check.' };
@@ -1987,7 +2020,7 @@ const App = () => {
                     }
                 }
             };
-            const apiKey = "";
+            const apiKey = ""; // Canvas will provide this. Do not set your actual key here.
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
             try {
@@ -2033,7 +2066,7 @@ const App = () => {
                     }
                 }
             };
-            const apiKey = "";
+            const apiKey = ""; // Canvas will provide this. Do not set your actual key here.
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
             try {
@@ -2069,9 +2102,11 @@ const App = () => {
                 // For a real app, you'd upload these to Firebase Storage and save URLs
                 // For demo, just store file objects (they won't persist on refresh)
                 setReviewImages(prev => [...prev, ...newImages]);
-                alert(`เพิ่มรูปภาพ ${newImages.length} รูป (จำลองการอัปโหลด)`);
+                // Replaced alert with console.log
+                console.log(`เพิ่มรูปภาพ ${newImages.length} รูป (จำลองการอัปโหลด)`);
             } else {
-                alert('รองรับเฉพาะไฟล์รูปภาพ (jpg, png, webp) เท่านั้น');
+                // Replaced alert with console.log
+                console.log('รองรับเฉพาะไฟล์รูปภาพ (jpg, png, webp) เท่านั้น');
             }
         };
 
@@ -2080,11 +2115,14 @@ const App = () => {
             const newVideos = files.filter(file => ['video/mp4', 'video/mov'].includes(file.type) && file.size <= 50 * 1024 * 1024); // 50MB
             if (newVideos.length > 0 && reviewVideos.length + newVideos.length <= 3) {
                 setReviewVideos(prev => [...prev, ...newVideos]);
-                alert(`เพิ่มวิดีโอ ${newVideos.length} คลิป (จำลองการอัปโหลด)`);
+                // Replaced alert with console.log
+                console.log(`เพิ่มวิดีโอ ${newVideos.length} คลิป (จำลองการอัปโหลด)`);
             } else if (reviewVideos.length + newVideos.length > 3) {
-                alert('อัปโหลดวิดีโอได้สูงสุด 3 คลิปต่อรีวิว');
+                // Replaced alert with console.log
+                console.log('อัปโหลดวิดีโอได้สูงสุด 3 คลิปต่อรีวิว');
             } else {
-                alert('รองรับเฉพาะไฟล์วิดีโอ (mp4, mov) และขนาดไม่เกิน 50MB ต่อคลิป');
+                // Replaced alert with console.log
+                console.log('รองรับเฉพาะไฟล์วิดีโอ (mp4, mov) และขนาดไม่เกิน 50MB ต่อคลิป');
             }
         };
 
@@ -2117,6 +2155,14 @@ const App = () => {
 
 
             try {
+                // If publicReviewsRef is null, it means Firebase wasn't initialized properly or db is null.
+                // In a real app, you'd want to handle this more robustly (e.g., show an error message instead of crashing).
+                if (!publicReviewsRef) {
+                    setSubmitError('Firebase Firestore is not initialized. Cannot submit review.');
+                    setSubmitLoading(false);
+                    return;
+                }
+
                 const newReview = {
                     reviewerId: userId,
                     reviewerName: user.displayName || user.email || `ผู้ใช้ ${userId.substring(0, 8)}...`,
@@ -2133,13 +2179,14 @@ const App = () => {
                 };
 
                 // Add review to public collection
-                await addDoc(publicReviewsRef, newReview);
+                const docRef = await addDoc(publicReviewsRef, newReview); // Store the document reference
                 // Optionally, add a reference to private collection if user wants to manage their own reviews
                 if (privateReviewsRef) {
-                    await addDoc(privateReviewsRef, { reviewId: newReview.id, timestamp: newReview.timestamp });
+                    await setDoc(doc(privateReviewsRef, docRef.id), { timestamp: newReview.timestamp }); // Use the same doc ID
                 }
 
-                alert('รีวิวของคุณถูกโพสต์แล้ว!');
+                // Replaced alert with console.log
+                console.log('รีวิวของคุณถูกโพสต์แล้ว!');
                 // Clear form
                 setReviewText('');
                 setReviewImages([]);
