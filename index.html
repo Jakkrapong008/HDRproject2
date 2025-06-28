@@ -204,7 +204,7 @@ const mockOtopProducts = [
         price: '130 บาท',
         producer: 'ศูนย์ โอทอป เชียงใหม่',
         purchaseChannels: {
-            line: '#', facebook: '#', phone: '#', shopee: '#', lazada: '#', website: 'https://www.otopchiangmai.com/page/id/%E0%B8%99%E0%B9%89%E0%B8%B3%E0%B8%9C%E0%B8%B6%E0%B9%89%E0%B8%87-%E0%B8%94%E0%B8%AD%E0%B8%81%E0%B8%AA%E0%B8%B2%E0%B8%9A%E0%B9%80%E0%B8%AA%E0%B8%B7%E0%B8%AD-%E0%B8%A8%E0%B8%B9%E0%B8%99%E0%B8%A2%E0%B9%8C-otop-%E0%B9%80%E0%B8%8A%E0%B8%B5%E0%B8%A2%E0%B8%87%E0%B9%83%E0%B8%AB%E0%B8%A1%E0%B9%88',
+            line: '#', facebook: '#', phone: '#', shopee: '#', lazada: '#', website: 'https://www.otopchiangmai.com/page/id/%E0%B8%99%E0%B9%89%E0%B8%B3%E0%B8%9C%E0%B8%B6%E0%B9%89%E0%B8%87-%E0%B8%94%E0%B8%AD%E0%B8%81%E0%B8%AA%E0%B8%B2%E0%B8%9B%E0%B9%80%E0%B8%AA%E0%B8%B7%E0%B8%AD-%E0%B8%A8%E0%B8%B9%E0%B8%99%E0%B8%A2%E0%B9%8C-otop-%E0%B9%80%E0%B8%8A%E0%B8%B5%E0%B8%A2%E0%B8%87%E0%B9%83%E0%B8%AB%E0%B8%A1%E0%B9%88',
             physicalStore: 'https://maps.app.goo.gl/chiangmai-chili'
         },
         images: ['https://www.otopchiangmai.com/resize.php?src=uploads/2f7116dd55348c1618d5496eb35b0be4.jpg&w=400&h=400&os=1'],
@@ -267,7 +267,7 @@ const App = () => {
                 if (currentUser) {
                     setUser(currentUser);
                     setUserId(currentUser.uid);
-                    console.log("Authenticated with UID:", currentUser.uid);
+                    console.log("Firebase Auth: Authenticated with UID:", currentUser.uid);
                     setIsAuthReady(true);
                 } else {
                     let signedIn = false;
@@ -275,29 +275,31 @@ const App = () => {
 
                     if (initialAuthToken) {
                         try {
-                            console.log("Attempting to sign in with custom token...");
+                            // Log only a portion of the token for security/readability, if it's long.
+                            console.log("Firebase Auth: Attempting to sign in with custom token. Token prefix:", initialAuthToken.substring(0, 15), "...");
                             await signInWithCustomToken(authentication, initialAuthToken);
-                            console.log("Signed in with custom token.");
-                            signedIn = true; // Mark as signed in if custom token works
+                            console.log("Firebase Auth: Signed in with custom token successfully.");
+                            signedIn = true;
                         } catch (tokenError) {
-                            console.error("Error signing in with custom token:", tokenError);
-                            // If custom token fails, proceed to try anonymous sign-in below
+                            console.error("Firebase Auth Error: Failed to sign in with custom token (auth/invalid-claims likely).", tokenError);
+                            // Fallback to anonymous sign-in will happen below if not signedIn
                         }
+                    } else {
+                        console.log("Firebase Auth: __initial_auth_token is not defined. Attempting anonymous sign-in.");
                     }
 
-                    if (!signedIn) { // Only attempt anonymous if custom token not tried or failed
+                    if (!signedIn) {
                         try {
-                            console.log("Attempting to sign in anonymously...");
+                            console.log("Firebase Auth: Attempting to sign in anonymously...");
                             await signInAnonymously(authentication);
-                            console.log("Signed in anonymously.");
+                            console.log("Firebase Auth: Signed in anonymously successfully.");
                         } catch (anonError) {
-                            console.error("Failed to sign in anonymously:", anonError);
-                            // If anonymous sign-in also fails, ensure user state is cleared
-                            setUser(null);
-                            setUserId('anonymous');
+                            console.error("Firebase Auth Error: Failed to sign in anonymously.", anonError);
+                            setUser(null); // Ensure user is null if anonymous sign-in also fails
+                            setUserId('anonymous'); // Ensure userId is 'anonymous'
                         }
                     }
-                    setIsAuthReady(true); // Mark auth as ready after all sign-in attempts
+                    setIsAuthReady(true); // Always set auth ready, even if login fails
                 }
             });
 
@@ -868,7 +870,7 @@ const App = () => {
         const PlaceIcon = ({ type }) => {
             const icons = {
                 attraction: '🏞️',
-                restaurant: '🍜',
+                restaurant: '�',
                 cafe: '☕'
             };
             return <span className="text-2xl mr-3">{icons[type] || '📍'}</span>;
@@ -2419,3 +2421,4 @@ const App = () => {
 };
 
 export default App;
+�
